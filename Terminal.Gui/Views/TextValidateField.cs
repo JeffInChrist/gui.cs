@@ -81,16 +81,14 @@ namespace Terminal.Gui {
 			bool IsValid { get; }
 
 			/// <summary>
-			/// Set the input text, and get the formatted string for display.
+			/// Set the input text and get the current value.
 			/// </summary>
 			ustring Text { get; set; }
 
 			/// <summary>
-			/// Mask used for validation.
-			/// Not always a mask, can by a regex expression.
-			/// TODO: Maybe we can change the name.
+			/// Gets the formatted string for display.
 			/// </summary>
-			ustring Mask { get; set; }
+			ustring DisplayText { get; }
 		}
 
 		//////////////////////////////////////////////////////////////////////////////
@@ -107,22 +105,27 @@ namespace Terminal.Gui {
 		/// </summary>
 		public class NetMaskedTextProvider : ITextValidateProvider {
 			MaskedTextProvider provider;
-			string text;
 
 			/// <summary>
 			/// Empty Constructor
 			/// </summary>
-			public NetMaskedTextProvider () { }
+			public NetMaskedTextProvider (string mask)
+			{
+				Mask = mask;
+			}
 
-			///<inheritdoc/>
+			/// <summary>
+			/// Mask property
+			/// </summary>
 			public ustring Mask {
 				get {
 					return provider?.Mask;
 				}
 				set {
+					var current = provider != null ? provider.ToString (false, false) : string.Empty;
 					provider = new MaskedTextProvider (value == ustring.Empty ? "&&&&&&" : value.ToString ());
-					if (string.IsNullOrEmpty (text) == false) {
-						provider.Set (text);
+					if (string.IsNullOrEmpty (current) == false) {
+						provider.Set (current);
 					}
 				}
 			}
@@ -130,10 +133,9 @@ namespace Terminal.Gui {
 			///<inheritdoc/>
 			public ustring Text {
 				get {
-					return provider.ToDisplayString ();
+					return provider.ToString ();
 				}
 				set {
-					text = value.ToString ();
 					provider.Set (value.ToString ());
 				}
 			}
@@ -143,6 +145,9 @@ namespace Terminal.Gui {
 
 			///<inheritdoc/>
 			public bool Fixed => true;
+
+			///<inheritdoc/>
+			public ustring DisplayText => provider.ToDisplayString ();
 
 			///<inheritdoc/>
 			public int Cursor (int pos)
@@ -212,20 +217,25 @@ namespace Terminal.Gui {
 		public class TextRegexProvider : ITextValidateProvider {
 			Regex regex;
 			List<Rune> text;
-			List<Rune> mask;
+			List<Rune> pattern;
 
 			/// <summary>
-			/// Empty Constructor
+			/// Empty Constructor.
 			/// </summary>
-			public TextRegexProvider () { }
+			public TextRegexProvider (string pattern)
+			{
+				Pattern = pattern;
+			}
 
-			///<inheritdoc/>
-			public ustring Mask {
+			/// <summary>
+			/// Regex pattern property.
+			/// </summary>
+			public ustring Pattern {
 				get {
-					return ustring.Make (mask);
+					return ustring.Make (pattern);
 				}
 				set {
-					mask = value.ToRuneList ();
+					pattern = value.ToRuneList ();
 					CompileMask ();
 					SetupText ();
 				}
@@ -243,6 +253,9 @@ namespace Terminal.Gui {
 			}
 
 			///<inheritdoc/>
+			public ustring DisplayText => Text;
+
+			///<inheritdoc/>
 			public bool IsValid {
 				get {
 					return Validate (text);
@@ -256,6 +269,7 @@ namespace Terminal.Gui {
 			/// When true, validates with the regex pattern on each input, preventing the input if it's not valid.
 			/// </summary>
 			public bool ValidateOnInput { get; set; } = true;
+
 
 			bool Validate (List<Rune> text)
 			{
@@ -340,7 +354,7 @@ namespace Terminal.Gui {
 			/// </summary>
 			private void CompileMask ()
 			{
-				regex = new Regex (ustring.Make (mask).ToString (), RegexOptions.Compiled);
+				regex = new Regex (ustring.Make (pattern).ToString (), RegexOptions.Compiled);
 			}
 		}
 		#endregion
@@ -349,58 +363,66 @@ namespace Terminal.Gui {
 	/// <summary>
 	/// Text field that validates input through a  <see cref="ITextValidateProvider"/>
 	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	public class TextValidateField<T> : View where T : ITextValidateProvider {
+	public class TextValidateField : View {
 
 		ITextValidateProvider provider;
 		int cursorPosition = 0;
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="TextValidateField{T}"/> class using <see cref="LayoutStyle.Computed"/> positioning.
+		/// Initializes a new instance of the <see cref="TextValidateField"/> class using <see cref="LayoutStyle.Computed"/> positioning.
 		/// </summary>
-		public TextValidateField () : this (ustring.Empty)
+		public TextValidateField () : this (null)
 		{
 		}
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="TextValidateField{T}"></see>  class using <see cref="LayoutStyle.Computed"/> positioning.
+		/// Initializes a new instance of the <see cref="TextValidateField"/> class using <see cref="LayoutStyle.Computed"/> positioning.
 		/// </summary>
-		/// <param name="mask">Mask</param>
-		public TextValidateField (ustring mask) : this (mask, ustring.Empty) { }
-
-		/// <summary>
-		/// Initializes a new instance of the <see cref="TextValidateField{T}"/> class using <see cref="LayoutStyle.Computed"/> positioning.
-		/// </summary>
-		/// <param name="mask"></param>
-		/// <param name="text">Initial Value</param>
-		public TextValidateField (ustring mask, ustring text) : base ()
+		public TextValidateField (ITextValidateProvider provider)
 		{
-			provider = Activator.CreateInstance (typeof (T)) as ITextValidateProvider;
+			if (provider != null) {
+				Provider = provider;
+			}
 
-			Mask = mask;
-			Text = text;
+			Initialize ();
+		}
 
-			this.Width = text == ustring.Empty ? 20 : Text.Length;
-			this.Height = 1;
-			this.CanFocus = true;
+		void Initialize ()
+		{
+			Height = 1;
+			CanFocus = true;
 		}
 
 		/// <summary>
-		/// Get the Provider
+		/// Provider
 		/// </summary>
-		public T Provider => (T)provider;
+		public ITextValidateProvider Provider {
+			get => provider;
+			set {
+				provider = value;
+				if (provider.Fixed == true) {
+					this.Width = provider.DisplayText == ustring.Empty ? 10 : Text.Length;
+				}
+				HomeKeyHandler ();
+				SetNeedsDisplay ();
+			}
+		}
 
 		///<inheritdoc/>
 		public override bool MouseEvent (MouseEvent mouseEvent)
 		{
-			var c = provider.Cursor (mouseEvent.X - GetMargins (Frame.Width).left);
-			if (provider.Fixed == false && TextAlignment == TextAlignment.Right && Text.Length > 0) {
-				c += 1;
+			if (mouseEvent.Flags.HasFlag (MouseFlags.Button1Pressed)) {
+
+				var c = provider.Cursor (mouseEvent.X - GetMargins (Frame.Width).left);
+				if (provider.Fixed == false && TextAlignment == TextAlignment.Right && Text.Length > 0) {
+					c += 1;
+				}
+				cursorPosition = c;
+				SetFocus ();
+				SetNeedsDisplay ();
+				return true;
 			}
-			cursorPosition = c;
-			SetFocus ();
-			SetNeedsDisplay ();
-			return true;
+			return false;
 		}
 
 		/// <summary>
@@ -408,26 +430,17 @@ namespace Terminal.Gui {
 		/// </summary>
 		public new ustring Text {
 			get {
+				if (provider == null) {
+					return ustring.Empty;
+				}
+
 				return provider.Text;
 			}
 			set {
+				if (provider == null) {
+					return;
+				}
 				provider.Text = value;
-
-				SetNeedsDisplay ();
-			}
-		}
-
-		/// <summary>
-		/// Mask
-		/// </summary>
-		public ustring Mask {
-			get {
-				return provider.Mask;
-			}
-			set {
-				provider.Mask = value;
-
-				cursorPosition = provider.CursorStart ();
 
 				SetNeedsDisplay ();
 			}
@@ -472,6 +485,12 @@ namespace Terminal.Gui {
 		///<inheritdoc/>
 		public override void Redraw (Rect bounds)
 		{
+			if (provider == null) {
+				Move (0, 0);
+				Driver.AddStr ("Error: ITextValidateProvider not set!");
+				return;
+			}
+
 			var bgcolor = !IsValid ? Color.BrightRed : ColorScheme.Focus.Background;
 			var textColor = new Attribute (ColorScheme.Focus.Foreground, bgcolor);
 
@@ -488,8 +507,8 @@ namespace Terminal.Gui {
 			// Content
 			Driver.SetAttribute (textColor);
 			// Content
-			for (int i = 0; i < provider.Text.Length; i++) {
-				Driver.AddRune (provider.Text [i]);
+			for (int i = 0; i < provider.DisplayText.Length; i++) {
+				Driver.AddRune (provider.DisplayText [i]);
 			}
 
 			// Right Margin
@@ -571,6 +590,10 @@ namespace Terminal.Gui {
 		///<inheritdoc/>
 		public override bool ProcessKey (KeyEvent kb)
 		{
+			if (provider == null) {
+				return true;
+			}
+
 			switch (kb.Key) {
 			case Key.Home: HomeKeyHandler (); break;
 			case Key.End: EndKeyHandler (); break;
@@ -603,6 +626,10 @@ namespace Terminal.Gui {
 		/// </summary>
 		public virtual bool IsValid {
 			get {
+				if (provider == null) {
+					return false;
+				}
+
 				return provider.IsValid;
 			}
 		}

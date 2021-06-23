@@ -288,6 +288,8 @@ namespace Terminal.Gui.Core {
 			{
 				// Cleanup
 				Application.End (rs);
+				// Shutdown must be called to safely clean up Application if Init has been called
+				Application.Shutdown ();
 			}
 
 			// Test cases:
@@ -326,7 +328,6 @@ namespace Terminal.Gui.Core {
 			rs = Application.Begin (Application.Top);
 			Application.Run ();
 			cleanup (rs);
-
 		}
 
 		[Fact]
@@ -534,6 +535,115 @@ namespace Terminal.Gui.Core {
 			f.Y = Pos.Y (v2) - Pos.Y (v1);
 
 			Assert.Throws<InvalidOperationException> (() => Application.Run ());
+			Application.Shutdown ();
+		}
+
+		[Fact]
+		public void Pos_Add_Operator ()
+		{
+
+			Application.Init (new FakeDriver (), new FakeMainLoop (() => FakeConsole.ReadKey (true)));
+
+			var top = Application.Top;
+
+			var view = new View () { X = 0, Y = 0, Width = 20, Height = 20 };
+			var field = new TextField () { X = 0, Y = 0, Width = 20 };
+			var count = 0;
+
+			field.KeyDown += (k) => {
+				if (k.KeyEvent.Key == Key.Enter) {
+					field.Text = $"Label {count}";
+					var label = new Label (field.Text) { X = 0, Y = field.Y, Width = 20 };
+					view.Add (label);
+					Assert.Equal ($"Label {count}", label.Text);
+					Assert.Equal ($"Pos.Absolute({count})", label.Y.ToString ());
+
+					Assert.Equal ($"Pos.Absolute({count})", field.Y.ToString ());
+					field.Y += 1;
+					count++;
+					Assert.Equal ($"Pos.Absolute({count})", field.Y.ToString ());
+				}
+			};
+
+			Application.Iteration += () => {
+				while (count < 20) {
+					field.OnKeyDown (new KeyEvent (Key.Enter, new KeyModifiers ()));
+				}
+
+				Application.RequestStop ();
+			};
+
+			var win = new Window ();
+			win.Add (view);
+			win.Add (field);
+
+			top.Add (win);
+
+			Application.Run (top);
+
+			Assert.Equal (20, count);
+
+			// Shutdown must be called to safely clean up Application if Init has been called
+			Application.Shutdown ();
+		}
+
+		[Fact]
+		public void Pos_Subtract_Operator ()
+		{
+
+			Application.Init (new FakeDriver (), new FakeMainLoop (() => FakeConsole.ReadKey (true)));
+
+			var top = Application.Top;
+
+			var view = new View () { X = 0, Y = 0, Width = 20, Height = 20 };
+			var field = new TextField () { X = 0, Y = 0, Width = 20 };
+			var count = 20;
+			var listLabels = new List<Label> ();
+
+			for (int i = 0; i < count; i++) {
+				field.Text = $"Label {i}";
+				var label = new Label (field.Text) { X = 0, Y = field.Y, Width = 20 };
+				view.Add (label);
+				Assert.Equal ($"Label {i}", label.Text);
+				Assert.Equal ($"Pos.Absolute({i})", field.Y.ToString ());
+				listLabels.Add (label);
+
+				Assert.Equal ($"Pos.Absolute({i})", field.Y.ToString ());
+				field.Y += 1;
+				Assert.Equal ($"Pos.Absolute({i + 1})", field.Y.ToString ());
+			}
+
+			field.KeyDown += (k) => {
+				if (k.KeyEvent.Key == Key.Enter) {
+					Assert.Equal ($"Label {count - 1}", listLabels [count - 1].Text);
+					view.Remove (listLabels [count - 1]);
+
+					Assert.Equal ($"Pos.Absolute({count})", field.Y.ToString ());
+					field.Y -= 1;
+					count--;
+					Assert.Equal ($"Pos.Absolute({count})", field.Y.ToString ());
+				}
+			};
+
+			Application.Iteration += () => {
+				while (count > 0) {
+					field.OnKeyDown (new KeyEvent (Key.Enter, new KeyModifiers ()));
+				}
+
+				Application.RequestStop ();
+			};
+
+			var win = new Window ();
+			win.Add (view);
+			win.Add (field);
+
+			top.Add (win);
+
+			Application.Run (top);
+
+			Assert.Equal (0, count);
+
+			// Shutdown must be called to safely clean up Application if Init has been called
 			Application.Shutdown ();
 		}
 	}

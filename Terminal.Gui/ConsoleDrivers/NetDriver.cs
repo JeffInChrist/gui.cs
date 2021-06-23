@@ -183,7 +183,8 @@ namespace Terminal.Gui {
 						return;
 					}
 				} else {
-					largestWindowHeight = Math.Max (Console.BufferHeight, largestWindowHeight);
+					//largestWindowHeight = Math.Max (Console.BufferHeight, largestWindowHeight);
+					largestWindowHeight = Console.BufferHeight;
 					if (Console.BufferWidth != consoleDriver.Cols || largestWindowHeight != consoleDriver.Rows
 						|| Console.WindowHeight != lastWindowHeight) {
 						lastWindowHeight = Console.WindowHeight;
@@ -226,7 +227,7 @@ namespace Terminal.Gui {
 		void GetConsoleInputType (ConsoleKeyInfo consoleKeyInfo)
 		{
 			InputResult inputResult = new InputResult {
-				EventType = EventType.key
+				EventType = EventType.Key
 			};
 			ConsoleKeyInfo newConsoleKeyInfo = consoleKeyInfo;
 			ConsoleKey key = 0;
@@ -280,7 +281,7 @@ namespace Terminal.Gui {
 				newConsoleKeyInfo = consoleKeyInfo;
 				break;
 			}
-			if (inputResult.EventType == EventType.key) {
+			if (inputResult.EventType == EventType.Key) {
 				inputResult.ConsoleKeyInfo = newConsoleKeyInfo;
 			} else {
 				inputResult.MouseEvent = mouseEvent;
@@ -440,7 +441,7 @@ namespace Terminal.Gui {
 				GetMouseEvent (cki);
 				return;
 			}
-			if (inputResult.EventType == EventType.key) {
+			if (inputResult.EventType == EventType.Key) {
 				inputResult.ConsoleKeyInfo = newConsoleKeyInfo;
 			} else {
 				inputResult.MouseEvent = mouseEvent;
@@ -1010,7 +1011,7 @@ namespace Terminal.Gui {
 		}
 
 		public enum EventType {
-			key = 1,
+			Key = 1,
 			Mouse = 2,
 			WindowSize = 3,
 			WindowPosition = 4
@@ -1076,12 +1077,14 @@ namespace Terminal.Gui {
 		int cols, rows, top;
 		public override int Cols => cols;
 		public override int Rows => rows;
+		public override int Left => 0;
 		public override int Top => top;
 		public override bool HeightAsBuffer { get; set; }
 
 		public NetWinVTConsole NetWinConsole { get; }
 		public bool IsWinPlatform { get; }
 		public bool AlwaysSetPosition { get; set; }
+		public override IClipboard Clipboard { get; }
 
 		int largestWindowHeight;
 
@@ -1092,7 +1095,19 @@ namespace Terminal.Gui {
 				IsWinPlatform = true;
 				NetWinConsole = new NetWinVTConsole ();
 			}
-			largestWindowHeight = Math.Max (Console.BufferHeight, largestWindowHeight);
+			//largestWindowHeight = Math.Max (Console.BufferHeight, largestWindowHeight);
+			largestWindowHeight = Console.BufferHeight;
+			if (IsWinPlatform) {
+				Clipboard = new WindowsClipboard ();
+			} else if (RuntimeInformation.IsOSPlatform (OSPlatform.OSX)) {
+				Clipboard = new MacOSXClipboard ();
+			} else {
+				if (CursesDriver.Is_WSL_Platform ()) {
+					Clipboard = new WSLClipboard ();
+				}else{
+					Clipboard = new CursesClipboard ();
+				}
+			}
 		}
 
 		// The format is rows, columns and 3 values on the last column: Rune, Attribute and Dirty Flag
@@ -1210,31 +1225,31 @@ namespace Terminal.Gui {
 			Colors.TopLevel.HotNormal = MakeColor (ConsoleColor.DarkYellow, ConsoleColor.Black);
 			Colors.TopLevel.HotFocus = MakeColor (ConsoleColor.DarkBlue, ConsoleColor.DarkCyan);
 
-			Colors.Base.Normal = MakeColor (ConsoleColor.White, ConsoleColor.Blue);
-			Colors.Base.Focus = MakeColor (ConsoleColor.Black, ConsoleColor.Cyan);
-			Colors.Base.HotNormal = MakeColor (ConsoleColor.Yellow, ConsoleColor.Blue);
-			Colors.Base.HotFocus = MakeColor (ConsoleColor.Yellow, ConsoleColor.Cyan);
+			Colors.Base.Normal = MakeColor (ConsoleColor.White, ConsoleColor.DarkBlue);
+			Colors.Base.Focus = MakeColor (ConsoleColor.Black, ConsoleColor.Gray);
+			Colors.Base.HotNormal = MakeColor (ConsoleColor.DarkCyan, ConsoleColor.DarkBlue);
+			Colors.Base.HotFocus = MakeColor (ConsoleColor.Blue, ConsoleColor.Gray);
 
 			// Focused,
 			//    Selected, Hot: Yellow on Black
 			//    Selected, text: white on black
 			//    Unselected, hot: yellow on cyan
 			//    unselected, text: same as unfocused
-			Colors.Menu.HotFocus = MakeColor (ConsoleColor.Yellow, ConsoleColor.Black);
+			Colors.Menu.Normal = MakeColor (ConsoleColor.White, ConsoleColor.DarkGray);
 			Colors.Menu.Focus = MakeColor (ConsoleColor.White, ConsoleColor.Black);
-			Colors.Menu.HotNormal = MakeColor (ConsoleColor.Yellow, ConsoleColor.Cyan);
-			Colors.Menu.Normal = MakeColor (ConsoleColor.White, ConsoleColor.Cyan);
-			Colors.Menu.Disabled = MakeColor (ConsoleColor.DarkGray, ConsoleColor.Cyan);
+			Colors.Menu.HotNormal = MakeColor (ConsoleColor.Yellow, ConsoleColor.DarkGray);
+			Colors.Menu.HotFocus = MakeColor (ConsoleColor.Yellow, ConsoleColor.Black);
+			Colors.Menu.Disabled = MakeColor (ConsoleColor.Gray, ConsoleColor.DarkGray);
 
 			Colors.Dialog.Normal = MakeColor (ConsoleColor.Black, ConsoleColor.Gray);
-			Colors.Dialog.Focus = MakeColor (ConsoleColor.Black, ConsoleColor.Cyan);
-			Colors.Dialog.HotNormal = MakeColor (ConsoleColor.Blue, ConsoleColor.Gray);
-			Colors.Dialog.HotFocus = MakeColor (ConsoleColor.Blue, ConsoleColor.Cyan);
+			Colors.Dialog.Focus = MakeColor (ConsoleColor.White, ConsoleColor.DarkGray);
+			Colors.Dialog.HotNormal = MakeColor (ConsoleColor.DarkBlue, ConsoleColor.Gray);
+			Colors.Dialog.HotFocus = MakeColor (ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
-			Colors.Error.Normal = MakeColor (ConsoleColor.White, ConsoleColor.Red);
-			Colors.Error.Focus = MakeColor (ConsoleColor.Black, ConsoleColor.Gray);
-			Colors.Error.HotNormal = MakeColor (ConsoleColor.Yellow, ConsoleColor.Red);
-			Colors.Error.HotFocus = Colors.Error.HotNormal;
+			Colors.Error.Normal = MakeColor (ConsoleColor.DarkRed, ConsoleColor.White);
+			Colors.Error.Focus = MakeColor (ConsoleColor.White, ConsoleColor.DarkRed);
+			Colors.Error.HotNormal = MakeColor (ConsoleColor.Black, ConsoleColor.White);
+			Colors.Error.HotFocus = MakeColor (ConsoleColor.Black, ConsoleColor.DarkRed);
 		}
 
 		void ResizeScreen ()
@@ -1441,7 +1456,7 @@ namespace Terminal.Gui {
 			case ConsoleKey.Enter:
 				return MapKeyModifiers (keyInfo, Key.Enter);
 			case ConsoleKey.Spacebar:
-				return MapKeyModifiers (keyInfo, Key.Space);
+				return MapKeyModifiers (keyInfo, keyInfo.KeyChar == 0 ? Key.Space : (Key)keyInfo.KeyChar);
 			case ConsoleKey.Backspace:
 				return MapKeyModifiers (keyInfo, Key.Backspace);
 			case ConsoleKey.Delete:
@@ -1506,7 +1521,7 @@ namespace Terminal.Gui {
 				return (Key)((uint)Key.F1 + delta);
 			}
 			if (keyInfo.KeyChar != 0) {
-				return (Key)((uint)keyInfo.KeyChar);
+				return MapKeyModifiers (keyInfo, (Key)((uint)keyInfo.KeyChar));
 			}
 
 			return (Key)(0xffffffff);
@@ -1557,7 +1572,7 @@ namespace Terminal.Gui {
 		void ProcessInput (NetEvents.InputResult inputEvent)
 		{
 			switch (inputEvent.EventType) {
-			case NetEvents.EventType.key:
+			case NetEvents.EventType.Key:
 				var map = MapKey (inputEvent.ConsoleKeyInfo);
 				if (map == (Key)0xffffffff) {
 					return;
@@ -1595,7 +1610,8 @@ namespace Terminal.Gui {
 					Console.WindowHeight);
 				top = 0;
 			} else {
-				largestWindowHeight = Math.Max (Console.BufferHeight, largestWindowHeight);
+				//largestWindowHeight = Math.Max (Console.BufferHeight, largestWindowHeight);
+				largestWindowHeight = Console.BufferHeight;
 				size = new Size (Console.BufferWidth, largestWindowHeight);
 			}
 			cols = size.Width;
@@ -1743,6 +1759,23 @@ namespace Terminal.Gui {
 		public override bool EnsureCursorVisibility ()
 		{
 			return false;
+		}
+
+		public override void SendKeys (char keyChar, ConsoleKey key, bool shift, bool alt, bool control)
+		{
+			NetEvents.InputResult input = new NetEvents.InputResult ();
+			ConsoleKey ck;
+			if (char.IsLetter (keyChar)) {
+				ck = key;
+			} else {
+				ck = (ConsoleKey)'\0';
+			}
+			input.EventType = NetEvents.EventType.Key;
+			input.ConsoleKeyInfo = new ConsoleKeyInfo (keyChar, ck, shift, alt, control);
+
+			try {
+				ProcessInput (input);
+			} catch (OverflowException) { }
 		}
 		#endregion
 

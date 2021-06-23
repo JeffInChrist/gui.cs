@@ -37,6 +37,7 @@ namespace Terminal.Gui.Views {
 			Assert.False (r.WantMousePositionReports);
 			Assert.Null (r.SuperView);
 			Assert.Null (r.MostFocused);
+			Assert.Equal (TextDirection.LeftRight_TopBottom, r.TextDirection);
 
 			// Empty Rect
 			r = new View (Rect.Empty);
@@ -60,6 +61,7 @@ namespace Terminal.Gui.Views {
 			Assert.False (r.WantMousePositionReports);
 			Assert.Null (r.SuperView);
 			Assert.Null (r.MostFocused);
+			Assert.Equal (TextDirection.LeftRight_TopBottom, r.TextDirection);
 
 			// Rect with values
 			r = new View (new Rect (1, 2, 3, 4));
@@ -83,6 +85,32 @@ namespace Terminal.Gui.Views {
 			Assert.False (r.WantMousePositionReports);
 			Assert.Null (r.SuperView);
 			Assert.Null (r.MostFocused);
+			Assert.Equal (TextDirection.LeftRight_TopBottom, r.TextDirection);
+
+			// Initializes a view with a vertical direction
+			r = new View ("Vertical View", TextDirection.TopBottom_LeftRight);
+			Assert.NotNull (r);
+			Assert.Equal (LayoutStyle.Computed, r.LayoutStyle);
+			Assert.Equal ("View()({X=0,Y=0,Width=1,Height=13})", r.ToString ());
+			Assert.False (r.CanFocus);
+			Assert.False (r.HasFocus);
+			Assert.Equal (new Rect (0, 0, 1, 13), r.Bounds);
+			Assert.Equal (new Rect (0, 0, 1, 13), r.Frame);
+			Assert.Null (r.Focused);
+			Assert.Null (r.ColorScheme);
+			Assert.NotNull (r.Width);       // All view Dim are initialized now,
+			Assert.NotNull (r.Height);      // avoiding Dim errors.
+			Assert.NotNull (r.X);           // All view Pos are initialized now,
+			Assert.NotNull (r.Y);           // avoiding Pos errors.
+			Assert.False (r.IsCurrentTop);
+			Assert.Empty (r.Id);
+			Assert.Empty (r.Subviews);
+			Assert.False (r.WantContinuousButtonPressed);
+			Assert.False (r.WantMousePositionReports);
+			Assert.Null (r.SuperView);
+			Assert.Null (r.MostFocused);
+			Assert.Equal (TextDirection.TopBottom_LeftRight, r.TextDirection);
+
 		}
 
 		[Fact]
@@ -1020,7 +1048,7 @@ namespace Terminal.Gui.Views {
 		}
 
 		[Fact]
-		public void View_Difference_Between_An_Object_Initializer_And_A_Constructor ()
+		public void View_With_No_Difference_Between_An_Object_Initializer_And_A_Constructor ()
 		{
 			// Object Initializer
 			var view = new View () {
@@ -1033,8 +1061,10 @@ namespace Terminal.Gui.Views {
 			Assert.Equal (2, view.Y);
 			Assert.Equal (3, view.Width);
 			Assert.Equal (4, view.Height);
-			Assert.True (view.Frame.IsEmpty);
-			Assert.True (view.Bounds.IsEmpty);
+			Assert.False (view.Frame.IsEmpty);
+			Assert.Equal (new Rect (1, 2, 3, 4), view.Frame);
+			Assert.False (view.Bounds.IsEmpty);
+			Assert.Equal (new Rect (0, 0, 3, 4), view.Bounds);
 
 			view.LayoutSubviews ();
 
@@ -1073,8 +1103,10 @@ namespace Terminal.Gui.Views {
 			Assert.Equal (2, view.Y);
 			Assert.Equal (3, view.Width);
 			Assert.Equal (4, view.Height);
-			Assert.True (view.Frame.IsEmpty);
-			Assert.True (view.Bounds.IsEmpty);
+			Assert.False (view.Frame.IsEmpty);
+			Assert.Equal (new Rect (1, 2, 3, 4), view.Frame);
+			Assert.False (view.Bounds.IsEmpty);
+			Assert.Equal (new Rect (0, 0, 3, 4), view.Bounds);
 		}
 
 		[Fact]
@@ -1134,6 +1166,171 @@ namespace Terminal.Gui.Views {
 			};
 
 			Application.Run ();
+
+			// Shutdown must be called to safely clean up Application if Init has been called
+			Application.Shutdown ();
+		}
+
+		[Fact]
+		public void SetWidth_CanSetWidth ()
+		{
+			var top = new View () {
+				X = 0,
+				Y = 0,
+				Width = 80,
+			};
+
+			var v = new View () {
+				Width = Dim.Fill ()
+			};
+			top.Add (v);
+
+			Assert.False (v.SetWidth (70, out int rWidth));
+			Assert.Equal (70, rWidth);
+
+			v.Width = Dim.Fill (1);
+			Assert.False (v.SetWidth (70, out rWidth));
+			Assert.Equal (69, rWidth);
+
+			v.Width = null;
+			Assert.True (v.SetWidth (70, out rWidth));
+			Assert.Equal (70, rWidth);
+
+			v.IsInitialized = true;
+			v.Width = Dim.Fill (1);
+			Assert.Throws<ArgumentException> (() => v.Width = 75);
+			v.LayoutStyle = LayoutStyle.Absolute;
+			v.Width = 75;
+			Assert.True (v.SetWidth (60, out rWidth));
+			Assert.Equal (60, rWidth);
+		}
+
+		[Fact]
+		public void SetHeight_CanSetHeight ()
+		{
+			var top = new View () {
+				X = 0,
+				Y = 0,
+				Height = 20
+			};
+
+			var v = new View () {
+				Height = Dim.Fill ()
+			};
+			top.Add (v);
+
+			Assert.False (v.SetHeight (10, out int rHeight));
+			Assert.Equal (10, rHeight);
+
+			v.Height = Dim.Fill (1);
+			Assert.False (v.SetHeight (10, out rHeight));
+			Assert.Equal (9, rHeight);
+
+			v.Height = null;
+			Assert.True (v.SetHeight (10, out rHeight));
+			Assert.Equal (10, rHeight);
+
+			v.IsInitialized = true;
+			v.Height = Dim.Fill (1);
+			Assert.Throws<ArgumentException> (() => v.Height = 15);
+			v.LayoutStyle = LayoutStyle.Absolute;
+			v.Height = 15;
+			Assert.True (v.SetHeight (5, out rHeight));
+			Assert.Equal (5, rHeight);
+		}
+
+		[Fact]
+		public void GetCurrentWidth_CanSetWidth ()
+		{
+			var top = new View () {
+				X = 0,
+				Y = 0,
+				Width = 80,
+			};
+
+			var v = new View () {
+				Width = Dim.Fill ()
+			};
+			top.Add (v);
+
+			Assert.False (v.GetCurrentWidth (out int cWidth));
+			Assert.Equal (80, cWidth);
+
+			v.Width = Dim.Fill (1);
+			Assert.False (v.GetCurrentWidth (out cWidth));
+			Assert.Equal (79, cWidth);
+		}
+
+		[Fact]
+		public void GetCurrentHeight_CanSetHeight ()
+		{
+			var top = new View () {
+				X = 0,
+				Y = 0,
+				Height = 20
+			};
+
+			var v = new View () {
+				Height = Dim.Fill ()
+			};
+			top.Add (v);
+
+			Assert.False (v.GetCurrentHeight (out int cHeight));
+			Assert.Equal (20, cHeight);
+
+			v.Height = Dim.Fill (1);
+			Assert.False (v.GetCurrentHeight (out cHeight));
+			Assert.Equal (19, cHeight);
+		}
+
+		[Fact]
+		public void AutoSize_False_ResizeView_Is_Always_False ()
+		{
+			var label = new Label () { AutoSize = false };
+
+			label.Text = "New text";
+
+			Assert.False (label.AutoSize);
+			Assert.Equal ("{X=0,Y=0,Width=0,Height=0}", label.Bounds.ToString ());
+		}
+
+		[Fact]
+		public void AutoSize_True_ResizeView_With_Dim_Absolute ()
+		{
+			var label = new Label ();
+
+			label.Text = "New text";
+
+			Assert.True (label.AutoSize);
+			Assert.Equal ("{X=0,Y=0,Width=8,Height=1}", label.Bounds.ToString ());
+		}
+
+		[Fact]
+		public void AutoSize_True_ResizeView_With_Dim_Fill ()
+		{
+			var win = new Window (new Rect (0, 0, 30, 80), "");
+			var label = new Label () { Width = Dim.Fill (), Height = Dim.Fill () };
+			win.Add (label);
+
+			label.Text = "New text\nNew line";
+			win.LayoutSubviews ();
+
+			Assert.True (label.AutoSize);
+			Assert.Equal ("{X=0,Y=0,Width=28,Height=78}", label.Bounds.ToString ());
+		}
+
+		[Fact]
+		public void AutoSize_True_SetWidthHeight_With_Dim_Fill_And_Dim_Absolute ()
+		{
+			var win = new Window (new Rect (0, 0, 30, 80), "");
+			var label = new Label () { Width = Dim.Fill () };
+			win.Add (label);
+
+			label.Text = "New text\nNew line";
+			win.LayoutSubviews ();
+
+			Assert.True (label.AutoSize);
+			Assert.Equal ("{X=0,Y=0,Width=28,Height=2}", label.Bounds.ToString ());
 		}
 	}
 }

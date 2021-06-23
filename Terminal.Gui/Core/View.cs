@@ -478,6 +478,10 @@ namespace Terminal.Gui {
 
 				x = value;
 				SetNeedsLayout ();
+				if (x is Pos.PosAbsolute) {
+					frame = new Rect (x.Anchor (0), frame.Y, frame.Width, frame.Height);
+				}
+				textFormatter.Size = frame.Size;
 				SetNeedsDisplay (frame);
 			}
 		}
@@ -498,6 +502,10 @@ namespace Terminal.Gui {
 
 				y = value;
 				SetNeedsLayout ();
+				if (y is Pos.PosAbsolute) {
+					frame = new Rect (frame.X, y.Anchor (0), frame.Width, frame.Height);
+				}
+				textFormatter.Size = frame.Size;
 				SetNeedsDisplay (frame);
 			}
 		}
@@ -520,6 +528,10 @@ namespace Terminal.Gui {
 
 				width = value;
 				SetNeedsLayout ();
+				if (width is Dim.DimAbsolute) {
+					frame = new Rect (frame.X, frame.Y, width.Anchor (0), frame.Height);
+				}
+				textFormatter.Size = frame.Size;
 				SetNeedsDisplay (frame);
 			}
 		}
@@ -538,6 +550,10 @@ namespace Terminal.Gui {
 
 				height = value;
 				SetNeedsLayout ();
+				if (height is Dim.DimAbsolute) {
+					frame = new Rect (frame.X, frame.Y, frame.Width, height.Anchor (0));
+				}
+				textFormatter.Size = frame.Size;
 				SetNeedsDisplay (frame);
 			}
 		}
@@ -572,7 +588,7 @@ namespace Terminal.Gui {
 		/// </remarks>
 		public View (Rect frame)
 		{
-			Initialize (ustring.Empty, frame, LayoutStyle.Absolute);
+			Initialize (ustring.Empty, frame, LayoutStyle.Absolute, TextDirection.LeftRight_TopBottom);
 		}
 
 		/// <summary>
@@ -593,7 +609,7 @@ namespace Terminal.Gui {
 		///   Use <see cref="X"/>, <see cref="Y"/>, <see cref="Width"/>, and <see cref="Height"/> properties to dynamically control the size and location of the view.
 		/// </para>
 		/// </remarks>
-		public View () : this (text: string.Empty) { }
+		public View () : this (text: string.Empty, direction: TextDirection.LeftRight_TopBottom) { }
 
 		/// <summary>
 		///   Initializes a new instance of <see cref="View"/> using <see cref="LayoutStyle.Absolute"/> layout.
@@ -647,15 +663,17 @@ namespace Terminal.Gui {
 		/// </para>
 		/// </remarks>
 		/// <param name="text">text to initialize the <see cref="Text"/> property with.</param>
-		public View (ustring text)
+		/// <param name="direction">The text direction.</param>
+		public View (ustring text, TextDirection direction = TextDirection.LeftRight_TopBottom)
 		{
-			Initialize (text, Rect.Empty);
+			Initialize (text, Rect.Empty, LayoutStyle.Computed, direction);
 		}
 
-		void Initialize (ustring text, Rect rect, LayoutStyle layoutStyle = LayoutStyle.Computed)
+		void Initialize (ustring text, Rect rect, LayoutStyle layoutStyle = LayoutStyle.Computed,
+			TextDirection direction = TextDirection.LeftRight_TopBottom)
 		{
 			textFormatter = new TextFormatter ();
-			Text = text;
+			TextDirection = direction;
 
 			shortcutHelper = new ShortcutHelper ();
 
@@ -666,7 +684,7 @@ namespace Terminal.Gui {
 			// BUGBUG: CalcRect doesn't account for line wrapping
 			Rect r;
 			if (rect.IsEmpty) {
-				r = TextFormatter.CalcRect (0, 0, text);
+				r = TextFormatter.CalcRect (0, 0, text, direction);
 			} else {
 				r = rect;
 			}
@@ -676,6 +694,8 @@ namespace Terminal.Gui {
 			Height = r.Height;
 
 			Frame = r;
+
+			Text = text;
 		}
 
 		/// <summary>
@@ -1968,7 +1988,12 @@ namespace Terminal.Gui {
 			get => textFormatter.Text;
 			set {
 				textFormatter.Text = value;
-				ResizeView (autoSize);
+				var canResize = ResizeView (autoSize);
+				if (canResize && textFormatter.Size != Bounds.Size) {
+					Bounds = new Rect (new Point (Bounds.X, Bounds.Y), textFormatter.Size);
+				} else if (!canResize && textFormatter.Size != Bounds.Size) {
+					textFormatter.Size = Bounds.Size;
+				}
 				SetNeedsLayout ();
 				SetNeedsDisplay ();
 			}
@@ -1984,8 +2009,10 @@ namespace Terminal.Gui {
 			get => autoSize;
 			set {
 				var v = ResizeView (value);
+				textFormatter.AutoSize = v;
 				if (autoSize != v) {
 					autoSize = v;
+					textFormatter.NeedsFormat = true;
 					SetNeedsLayout ();
 					SetNeedsDisplay ();
 				}
@@ -2023,8 +2050,17 @@ namespace Terminal.Gui {
 		public virtual TextDirection TextDirection {
 			get => textFormatter.Direction;
 			set {
-				textFormatter.Direction = value;
-				SetNeedsDisplay ();
+				if (textFormatter.Direction != value) {
+					textFormatter.Direction = value;
+					if (IsInitialized && AutoSize) {
+						ResizeView (true);
+					} else if (IsInitialized) {
+						var b = new Rect (Bounds.X, Bounds.Y, Bounds.Height, Bounds.Width);
+						SetWidthHeight (b);
+					}
+					textFormatter.Size = Bounds.Size;
+					SetNeedsDisplay ();
+				}
 			}
 		}
 
@@ -2045,27 +2081,43 @@ namespace Terminal.Gui {
 
 		bool ResizeView (bool autoSize)
 		{
-			var aSize = autoSize;
-			if (textFormatter.Size != Bounds.Size && (((width == null || width is Dim.DimAbsolute) && (Bounds.Width == 0
-				|| autoSize && Bounds.Width != textFormatter.Size.Width))
-				|| ((height == null || height is Dim.DimAbsolute) && (Bounds.Height == 0
-				|| autoSize && Bounds.Height != textFormatter.Size.Height)))) {
-				Bounds = new Rect (Bounds.X, Bounds.Y, textFormatter.Size.Width, textFormatter.Size.Height);
-				if (width == null) {
-					width = Bounds.Width;
-				} else if (width is Dim.DimAbsolute) {
-					width = Math.Max (Bounds.Width, height.Anchor (Bounds.Width));
-				} else {
-					aSize = false;
-				}
-				if (height == null) {
-					height = Bounds.Height;
-				} else if (height is Dim.DimAbsolute) {
-					height = Math.Max (Bounds.Height, height.Anchor (Bounds.Height));
-				} else {
-					aSize = false;
-				}
+			if (!autoSize) {
+				return false;
 			}
+
+			var aSize = autoSize;
+			Rect nBounds = TextFormatter.CalcRect (Bounds.X, Bounds.Y, Text, textFormatter.Direction);
+			if (textFormatter.Size != nBounds.Size) {
+				textFormatter.Size = nBounds.Size;
+			}
+			if ((textFormatter.Size != Bounds.Size || textFormatter.Size != nBounds.Size)
+				&& (((width == null || width is Dim.DimAbsolute) && (Bounds.Width == 0
+				|| autoSize && Bounds.Width != nBounds.Width))
+				|| ((height == null || height is Dim.DimAbsolute) && (Bounds.Height == 0
+				|| autoSize && Bounds.Height != nBounds.Height)))) {
+				aSize = SetWidthHeight (nBounds);
+			}
+			return aSize;
+		}
+
+		bool SetWidthHeight (Rect nBounds)
+		{
+			bool aSize = false;
+			var canSizeW = SetWidth (nBounds.Width, out int rW);
+			var canSizeH = SetHeight (nBounds.Height, out int rH);
+			if (canSizeW) {
+				aSize = true;
+				width = rW;
+			}
+			if (canSizeH) {
+				aSize = true;
+				height = rH;
+			}
+			if (aSize) {
+				Bounds = new Rect (Bounds.X, Bounds.Y, canSizeW ? rW : Bounds.Width, canSizeH ? rH : Bounds.Height);
+				textFormatter.Size = Bounds.Size;
+			}
+
 			return aSize;
 		}
 
@@ -2221,15 +2273,13 @@ namespace Terminal.Gui {
 			return true;
 		}
 
-		bool CanSetWidth (int desiredWidth, out int resultWidth, out int currentWidth)
+		bool CanSetWidth (int desiredWidth, out int resultWidth)
 		{
 			int w = desiredWidth;
-			currentWidth = Width != null ? Width.Anchor (0) : 0;
 			bool canSetWidth;
 			if (Width is Dim.DimCombine || Width is Dim.DimView || Width is Dim.DimFill) {
 				// It's a Dim.DimCombine and so can't be assigned. Let it have it's width anchored.
 				w = Width.Anchor (w);
-				currentWidth = Width.Anchor (w);
 				canSetWidth = false;
 			} else if (Width is Dim.DimFactor factor) {
 				// Tries to get the SuperView width otherwise the view width.
@@ -2238,7 +2288,6 @@ namespace Terminal.Gui {
 					sw -= Frame.X;
 				}
 				w = Width.Anchor (sw);
-				currentWidth = Width.Anchor (sw);
 				canSetWidth = false;
 			} else {
 				canSetWidth = true;
@@ -2248,15 +2297,13 @@ namespace Terminal.Gui {
 			return canSetWidth;
 		}
 
-		bool CanSetHeight (int desiredHeight, out int resultHeight, out int currentHeight)
+		bool CanSetHeight (int desiredHeight, out int resultHeight)
 		{
 			int h = desiredHeight;
-			currentHeight = Height != null ? Height.Anchor (0) : 0;
 			bool canSetHeight;
 			if (Height is Dim.DimCombine || Height is Dim.DimView || Height is Dim.DimFill) {
 				// It's a Dim.DimCombine and so can't be assigned. Let it have it's height anchored.
 				h = Height.Anchor (h);
-				currentHeight = Height.Anchor (h);
 				canSetHeight = false;
 			} else if (Height is Dim.DimFactor factor) {
 				// Tries to get the SuperView height otherwise the view height.
@@ -2265,7 +2312,6 @@ namespace Terminal.Gui {
 					sh -= Frame.Y;
 				}
 				h = Height.Anchor (sh);
-				currentHeight = Height.Anchor (sh);
 				canSetHeight = false;
 			} else {
 				canSetHeight = true;
@@ -2283,7 +2329,7 @@ namespace Terminal.Gui {
 		/// <returns><c>true</c> if the width can be directly assigned, <c>false</c> otherwise.</returns>
 		public bool SetWidth (int desiredWidth, out int resultWidth)
 		{
-			return CanSetWidth (desiredWidth, out resultWidth, out _);
+			return CanSetWidth (desiredWidth, out resultWidth);
 		}
 
 		/// <summary>
@@ -2294,7 +2340,7 @@ namespace Terminal.Gui {
 		/// <returns><c>true</c> if the height can be directly assigned, <c>false</c> otherwise.</returns>
 		public bool SetHeight (int desiredHeight, out int resultHeight)
 		{
-			return CanSetHeight (desiredHeight, out resultHeight, out _);
+			return CanSetHeight (desiredHeight, out resultHeight);
 		}
 
 		/// <summary>
@@ -2304,7 +2350,10 @@ namespace Terminal.Gui {
 		/// <returns><c>true</c> if the width can be directly assigned, <c>false</c> otherwise.</returns>
 		public bool GetCurrentWidth (out int currentWidth)
 		{
-			return CanSetWidth (0, out _, out currentWidth);
+			SetRelativeLayout (SuperView == null ? Frame : SuperView.Frame);
+			currentWidth = Frame.Width;
+
+			return CanSetWidth (0, out _);
 		}
 
 		/// <summary>
@@ -2314,7 +2363,10 @@ namespace Terminal.Gui {
 		/// <returns><c>true</c> if the height can be directly assigned, <c>false</c> otherwise.</returns>
 		public bool GetCurrentHeight (out int currentHeight)
 		{
-			return CanSetHeight (0, out _, out currentHeight);
+			SetRelativeLayout (SuperView == null ? Frame : SuperView.Frame);
+			currentHeight = Frame.Height;
+
+			return CanSetHeight (0, out _);
 		}
 	}
 }

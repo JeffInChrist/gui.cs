@@ -613,14 +613,26 @@ namespace Terminal.Gui {
 		/// The current number of columns in the terminal.
 		/// </summary>
 		public abstract int Cols { get; }
+
 		/// <summary>
 		/// The current number of rows in the terminal.
 		/// </summary>
 		public abstract int Rows { get; }
+
+		/// <summary>
+		/// The current left in the terminal.
+		/// </summary>
+		public abstract int Left { get; }
+
 		/// <summary>
 		/// The current top in the terminal.
 		/// </summary>
 		public abstract int Top { get; }
+
+		/// <summary>
+		/// Get the operation system clipboard.
+		/// </summary>
+		public abstract IClipboard Clipboard { get; }
 
 		/// <summary>
 		/// If false height is measured by the window height and thus no scrolling.
@@ -738,6 +750,16 @@ namespace Terminal.Gui {
 		/// <param name="foregroundColorId">Foreground color identifier.</param>
 		/// <param name="backgroundColorId">Background color identifier.</param>
 		public abstract void SetColors (short foregroundColorId, short backgroundColorId);
+
+		/// <summary>
+		/// Allows sending keys without typing on a keyboard.
+		/// </summary>
+		/// <param name="keyChar">The character key.</param>
+		/// <param name="key">The key.</param>
+		/// <param name="shift">If shift key is sending.</param>
+		/// <param name="alt">If alt key is sending.</param>
+		/// <param name="control">If control key is sending.</param>
+		public abstract void SendKeys (char keyChar, ConsoleKey key, bool shift, bool alt, bool control);
 
 		/// <summary>
 		/// Set the handler when the terminal is resized.

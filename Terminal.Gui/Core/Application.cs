@@ -111,6 +111,15 @@ namespace Terminal.Gui {
 		}
 
 		/// <summary>
+		/// Alternative key to navigate forwards through all views. Ctrl+Tab is always used.
+		/// </summary>
+		public static Key AlternateForwardKey { get; set; } = Key.PageDown | Key.CtrlMask;
+		/// <summary>
+		/// Alternative key to navigate backwards through all views. Shift+Ctrl+Tab is always used.
+		/// </summary>
+		public static Key AlternateBackwardKey { get; set; } = Key.PageUp | Key.CtrlMask;
+
+		/// <summary>
 		/// The <see cref="MainLoop"/>  driver for the application
 		/// </summary>
 		/// <value>The main loop.</value>
@@ -199,14 +208,18 @@ namespace Terminal.Gui {
 		static void Init (Func<Toplevel> topLevelFactory, ConsoleDriver driver = null, IMainLoopDriver mainLoopDriver = null)
 		{
 			if (_initialized && driver == null) return;
-			
+
+			if (_initialized) {
+				throw new InvalidOperationException ("Init must be bracketed by Shutdown");
+			}
+
 			// Used only for start debugging on Unix.
-//#if DEBUG
-//			while (!System.Diagnostics.Debugger.IsAttached) {
-//				System.Threading.Thread.Sleep (100);
-//			}
-//			System.Diagnostics.Debugger.Break ();
-//#endif
+			//#if DEBUG
+			//			while (!System.Diagnostics.Debugger.IsAttached) {
+			//				System.Threading.Thread.Sleep (100);
+			//			}
+			//			System.Diagnostics.Debugger.Break ();
+			//#endif
 
 			// Reset all class variables (Application is a singleton).
 			ResetState ();
@@ -550,7 +563,6 @@ namespace Terminal.Gui {
 			Driver?.End ();
 			Driver = null;
 			Iteration = null;
-			UseSystemConsole = false;
 			RootMouseEvent = null;
 			Resized = null;
 			_initialized = false;

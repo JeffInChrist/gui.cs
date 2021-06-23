@@ -19,11 +19,14 @@ namespace Terminal.Gui {
 	internal class CursesDriver : ConsoleDriver {
 		public override int Cols => Curses.Cols;
 		public override int Rows => Curses.Lines;
+		public override int Left => 0;
 		public override int Top => 0;
 		public override bool HeightAsBuffer { get; set; }
+		public override IClipboard Clipboard { get => clipboard; }
 
 		CursorVisibility? initialCursorVisibility = null;
 		CursorVisibility? currentCursorVisibility = null;
+		IClipboard clipboard;
 
 		// Current row, and current col, tracked by Move/AddRune only
 		int ccol, crow;
@@ -79,6 +82,7 @@ namespace Terminal.Gui {
 				TerminalResized?.Invoke ();
 			}
 		}
+
 		public override void UpdateCursor () => Refresh ();
 
 		public override void End ()
@@ -90,11 +94,19 @@ namespace Terminal.Gui {
 			SetCursorVisibility (CursorVisibility.Default);
 
 			Curses.endwin ();
+
+			// I'm commenting this because was used in a trying to fix the Linux hanging and forgot to exclude it.
 			// Clear and reset entire screen.
-			Console.Out.Write ("\x1b[2J");
-			Console.Out.Flush ();
-			Console.Out.Write ("\x1b[1;25r");
-			Console.Out.Flush ();
+			//Console.Out.Write ("\x1b[2J");
+			//Console.Out.Flush ();
+
+			// Set top and bottom lines of a window.
+			//Console.Out.Write ("\x1b[1;25r");
+			//Console.Out.Flush ();
+
+			//Set cursor key to cursor.
+			//Console.Out.Write ("\x1b[?1l");
+			//Console.Out.Flush ();
 		}
 
 		public override void UpdateScreen () => window.redrawwin ();
@@ -109,7 +121,7 @@ namespace Terminal.Gui {
 
 		public Curses.Window window;
 
-		static short last_color_pair = 16;
+		//static short last_color_pair = 16;
 
 		/// <summary>
 		/// Creates a curses color from the provided foreground and background colors
@@ -119,12 +131,15 @@ namespace Terminal.Gui {
 		/// <returns></returns>
 		public static Attribute MakeColor (short foreground, short background)
 		{
-			Curses.InitColorPair (++last_color_pair, foreground, background);
+			var v = (short)((int)foreground | background << 4);
+			//Curses.InitColorPair (++last_color_pair, foreground, background);
+			Curses.InitColorPair (v, foreground, background);
 			return new Attribute (
-				value: Curses.ColorPair (last_color_pair),
+				//value: Curses.ColorPair (last_color_pair),
+				value: Curses.ColorPair (v),
 				foreground: (Color)foreground,
-				background: (Color)background
-				);
+				background: (Color)background);
+
 		}
 
 		int [,] colorPairs = new int [16, 16];
@@ -135,9 +150,9 @@ namespace Terminal.Gui {
 			int b = (short)background;
 			var v = colorPairs [f, b];
 			if ((v & 0x10000) == 0) {
-				b = b & 0x7;
+				b &= 0x7;
 				bool bold = (f & 0x8) != 0;
-				f = f & 0x7;
+				f &= 0x7;
 
 				v = MakeColor ((short)f, (short)b) | (bold ? Curses.A_BOLD : 0);
 				colorPairs [(int)foreground, (int)background] = v | 0x1000;
@@ -148,7 +163,7 @@ namespace Terminal.Gui {
 		Dictionary<int, int> rawPairs = new Dictionary<int, int> ();
 		public override void SetColors (short foreColorId, short backgroundColorId)
 		{
-			int key = (((ushort)foreColorId << 16)) | (ushort)backgroundColorId;
+			int key = ((ushort)foreColorId << 16) | (ushort)backgroundColorId;
 			if (!rawPairs.TryGetValue (key, out var v)) {
 				v = MakeColor (foreColorId, backgroundColorId);
 				rawPairs [key] = v;
@@ -669,12 +684,14 @@ namespace Terminal.Gui {
 			//}
 		}
 
+		Action<KeyEvent> keyHandler;
 		Action<MouseEvent> mouseHandler;
 
 		public override void PrepareToRun (MainLoop mainLoop, Action<KeyEvent> keyHandler, Action<KeyEvent> keyDownHandler, Action<KeyEvent> keyUpHandler, Action<MouseEvent> mouseHandler)
 		{
 			// Note: Curses doesn't support keydown/up events and thus any passed keyDown/UpHandlers will never be called
 			Curses.timeout (0);
+			this.keyHandler = keyHandler;
 			this.mouseHandler = mouseHandler;
 
 			var mLoop = mainLoop.Driver as UnixMainLoop;
@@ -684,6 +701,12 @@ namespace Terminal.Gui {
 				return true;
 			});
 
+			mLoop.WinChanged += () => {
+				if (Curses.CheckWinChange ()) {
+					Clip = new Rect (0, 0, Cols, Rows);
+					TerminalResized?.Invoke ();
+				}
+			};
 		}
 
 		Curses.Event oldMouseEvents, reportableMouseEvents;
@@ -693,6 +716,10 @@ namespace Terminal.Gui {
 				return;
 
 			try {
+				//Set cursor key to application.
+				//Console.Out.Write ("\x1b[?1h");
+				//Console.Out.Flush ();
+
 				window = Curses.initscr ();
 			} catch (Exception e) {
 				Console.WriteLine ("Curses failed to initialize, the exception is: " + e);
@@ -719,6 +746,16 @@ namespace Terminal.Gui {
 			default:
 				currentCursorVisibility = initialCursorVisibility = null;
 				break;
+			}
+
+			if (RuntimeInformation.IsOSPlatform (OSPlatform.OSX)) {
+				clipboard = new MacOSXClipboard ();
+			} else {
+				if (Is_WSL_Platform ()) {
+					clipboard = new WSLClipboard ();
+				} else {
+					clipboard = new CursesClipboard ();
+				}
 			}
 
 			Curses.raw ();
@@ -760,33 +797,33 @@ namespace Terminal.Gui {
 				Colors.TopLevel.Normal = MakeColor (Curses.COLOR_GREEN, Curses.COLOR_BLACK);
 				Colors.TopLevel.Focus = MakeColor (Curses.COLOR_WHITE, Curses.COLOR_CYAN);
 				Colors.TopLevel.HotNormal = MakeColor (Curses.COLOR_YELLOW, Curses.COLOR_BLACK);
-				Colors.TopLevel.HotFocus = MakeColor (Curses.COLOR_YELLOW, Curses.COLOR_CYAN);
+				Colors.TopLevel.HotFocus = MakeColor (Curses.COLOR_BLUE, Curses.COLOR_CYAN);
 
 				Colors.Base.Normal = MakeColor (Curses.COLOR_WHITE, Curses.COLOR_BLUE);
-				Colors.Base.Focus = MakeColor (Curses.COLOR_BLACK, Curses.COLOR_CYAN);
-				Colors.Base.HotNormal = Curses.A_BOLD | MakeColor (Curses.COLOR_YELLOW, Curses.COLOR_BLUE);
-				Colors.Base.HotFocus = Curses.A_BOLD | MakeColor (Curses.COLOR_YELLOW, Curses.COLOR_CYAN);
+				Colors.Base.Focus = MakeColor (Curses.COLOR_BLACK, Curses.COLOR_WHITE);
+				Colors.Base.HotNormal = MakeColor (Curses.COLOR_CYAN, Curses.COLOR_BLUE);
+				Colors.Base.HotFocus = Curses.A_BOLD | MakeColor (Curses.COLOR_BLUE, Curses.COLOR_GRAY);
 
 				// Focused,
 				//    Selected, Hot: Yellow on Black
 				//    Selected, text: white on black
 				//    Unselected, hot: yellow on cyan
 				//    unselected, text: same as unfocused
-				Colors.Menu.HotFocus = Curses.A_BOLD | MakeColor (Curses.COLOR_YELLOW, Curses.COLOR_BLACK);
+				Colors.Menu.Normal = Curses.A_BOLD | MakeColor (Curses.COLOR_WHITE, Curses.COLOR_GRAY);
 				Colors.Menu.Focus = Curses.A_BOLD | MakeColor (Curses.COLOR_WHITE, Curses.COLOR_BLACK);
-				Colors.Menu.HotNormal = Curses.A_BOLD | MakeColor (Curses.COLOR_YELLOW, Curses.COLOR_CYAN);
-				Colors.Menu.Normal = Curses.A_BOLD | MakeColor (Curses.COLOR_WHITE, Curses.COLOR_CYAN);
-				Colors.Menu.Disabled = MakeColor (Curses.COLOR_WHITE, Curses.COLOR_CYAN);
+				Colors.Menu.HotNormal = Curses.A_BOLD | MakeColor (Curses.COLOR_YELLOW, Curses.COLOR_GRAY);
+				Colors.Menu.HotFocus = Curses.A_BOLD | MakeColor (Curses.COLOR_YELLOW, Curses.COLOR_BLACK);
+				Colors.Menu.Disabled = MakeColor (Curses.COLOR_WHITE, Curses.COLOR_GRAY);
 
 				Colors.Dialog.Normal = MakeColor (Curses.COLOR_BLACK, Curses.COLOR_WHITE);
-				Colors.Dialog.Focus = MakeColor (Curses.COLOR_BLACK, Curses.COLOR_CYAN);
+				Colors.Dialog.Focus = MakeColor (Curses.COLOR_WHITE, Curses.COLOR_GRAY);
 				Colors.Dialog.HotNormal = MakeColor (Curses.COLOR_BLUE, Curses.COLOR_WHITE);
-				Colors.Dialog.HotFocus = MakeColor (Curses.COLOR_BLUE, Curses.COLOR_CYAN);
+				Colors.Dialog.HotFocus = MakeColor (Curses.COLOR_BLUE, Curses.COLOR_GRAY);
 
-				Colors.Error.Normal = Curses.A_BOLD | MakeColor (Curses.COLOR_WHITE, Curses.COLOR_RED);
-				Colors.Error.Focus = MakeColor (Curses.COLOR_BLACK, Curses.COLOR_WHITE);
-				Colors.Error.HotNormal = Curses.A_BOLD | MakeColor (Curses.COLOR_YELLOW, Curses.COLOR_RED);
-				Colors.Error.HotFocus = Colors.Error.HotNormal;
+				Colors.Error.Normal = MakeColor (Curses.COLOR_RED, Curses.COLOR_WHITE);
+				Colors.Error.Focus = Curses.A_BOLD | MakeColor (Curses.COLOR_WHITE, Curses.COLOR_RED);
+				Colors.Error.HotNormal = MakeColor (Curses.COLOR_BLACK, Curses.COLOR_WHITE);
+				Colors.Error.HotFocus = Curses.A_BOLD | MakeColor (Curses.COLOR_BLACK, Curses.COLOR_RED);
 			} else {
 				Colors.TopLevel.Normal = Curses.COLOR_GREEN;
 				Colors.TopLevel.Focus = Curses.COLOR_WHITE;
@@ -811,6 +848,15 @@ namespace Terminal.Gui {
 			}
 		}
 
+		public static bool Is_WSL_Platform ()
+		{
+			var result = BashRunner.Run ("uname -a");
+			if (result.Contains ("microsoft") && result.Contains ("WSL")) {
+				return true;
+			}
+			return false;
+		}
+
 		static int MapColor (Color color)
 		{
 			switch (color) {
@@ -831,21 +877,22 @@ namespace Terminal.Gui {
 			case Color.Gray:
 				return Curses.COLOR_WHITE;
 			case Color.DarkGray:
-				return Curses.COLOR_BLACK | Curses.A_BOLD;
+				//return Curses.COLOR_BLACK | Curses.A_BOLD;
+				return Curses.COLOR_GRAY;
 			case Color.BrightBlue:
-				return Curses.COLOR_BLUE | Curses.A_BOLD;
+				return Curses.COLOR_BLUE | Curses.A_BOLD | Curses.COLOR_GRAY;
 			case Color.BrightGreen:
-				return Curses.COLOR_GREEN | Curses.A_BOLD;
+				return Curses.COLOR_GREEN | Curses.A_BOLD | Curses.COLOR_GRAY;
 			case Color.BrightCyan:
-				return Curses.COLOR_CYAN | Curses.A_BOLD;
+				return Curses.COLOR_CYAN | Curses.A_BOLD | Curses.COLOR_GRAY;
 			case Color.BrightRed:
-				return Curses.COLOR_RED | Curses.A_BOLD;
+				return Curses.COLOR_RED | Curses.A_BOLD | Curses.COLOR_GRAY;
 			case Color.BrightMagenta:
-				return Curses.COLOR_MAGENTA | Curses.A_BOLD;
+				return Curses.COLOR_MAGENTA | Curses.A_BOLD | Curses.COLOR_GRAY;
 			case Color.BrightYellow:
-				return Curses.COLOR_YELLOW | Curses.A_BOLD;
+				return Curses.COLOR_YELLOW | Curses.A_BOLD | Curses.COLOR_GRAY;
 			case Color.White:
-				return Curses.COLOR_WHITE | Curses.A_BOLD;
+				return Curses.COLOR_WHITE | Curses.A_BOLD | Curses.COLOR_GRAY;
 			}
 			throw new ArgumentException ("Invalid color code");
 		}
@@ -937,6 +984,28 @@ namespace Terminal.Gui {
 		{
 			return false;
 		}
+
+		public override void SendKeys (char keyChar, ConsoleKey key, bool shift, bool alt, bool control)
+		{
+			Key k;
+
+			if ((shift || alt || control)
+				&& keyChar - (int)Key.Space >= (uint)Key.A && keyChar - (int)Key.Space <= (uint)Key.Z) {
+				k = (Key)(keyChar - (uint)Key.Space);
+			} else {
+				k = (Key)keyChar;
+			}
+			if (shift) {
+				k |= Key.ShiftMask;
+			}
+			if (alt) {
+				k |= Key.AltMask;
+			}
+			if (control) {
+				k |= Key.CtrlMask;
+			}
+			keyHandler (new KeyEvent (k, MapKeyModifiers (k)));
+		}
 	}
 
 	internal static class Platform {
@@ -997,6 +1066,252 @@ namespace Terminal.Gui {
 				return false;
 			killpg (0, signal);
 			return true;
+		}
+	}
+
+	class CursesClipboard : ClipboardBase {
+		public override bool IsSupported => CheckSupport ();
+
+		bool CheckSupport ()
+		{
+			try {
+				var result = BashRunner.Run ("which xclip");
+				return BashRunner.FileExists (result);
+			} catch (Exception) {
+				// Permissions issue.
+				return false;
+			}
+		}
+
+		protected override string GetClipboardDataImpl ()
+		{
+			var tempFileName = System.IO.Path.GetTempFileName ();
+			try {
+				// BashRunner.Run ($"xsel -o --clipboard > {tempFileName}");
+				BashRunner.Run ($"xclip -selection clipboard -o > {tempFileName}");
+				return System.IO.File.ReadAllText (tempFileName);
+			} finally {
+				System.IO.File.Delete (tempFileName);
+			}
+		}
+
+		protected override void SetClipboardDataImpl (string text)
+		{
+			// var tempFileName = System.IO.Path.GetTempFileName ();
+			// System.IO.File.WriteAllText (tempFileName, text);
+			// try {
+			// 	// BashRunner.Run ($"cat {tempFileName} | xsel -i --clipboard");
+			// 	BashRunner.Run ($"cat {tempFileName} | xclip -selection clipboard");
+			// } finally {
+			// 	System.IO.File.Delete (tempFileName);
+			// }
+
+			BashRunner.Run ("xclip -selection clipboard -i", false, text);
+		}
+	}
+
+	static class BashRunner {
+		public static string Run (string commandLine, bool output = true, string inputText = "")
+		{
+			var arguments = $"-c \"{commandLine}\"";
+
+			if (output) {
+				var errorBuilder = new System.Text.StringBuilder ();
+				var outputBuilder = new System.Text.StringBuilder ();
+
+				using (var process = new System.Diagnostics.Process {
+					StartInfo = new System.Diagnostics.ProcessStartInfo {
+						FileName = "bash",
+						Arguments = arguments,
+						RedirectStandardOutput = true,
+						RedirectStandardError = true,
+						UseShellExecute = false,
+						CreateNoWindow = false,
+					}
+				}) {
+					process.Start ();
+					process.OutputDataReceived += (sender, args) => { outputBuilder.AppendLine (args.Data); };
+					process.BeginOutputReadLine ();
+					process.ErrorDataReceived += (sender, args) => { errorBuilder.AppendLine (args.Data); };
+					process.BeginErrorReadLine ();
+					if (!process.DoubleWaitForExit ()) {
+						var timeoutError = $@"Process timed out. Command line: bash {arguments}.
+							Output: {outputBuilder}
+							Error: {errorBuilder}";
+						throw new Exception (timeoutError);
+					}
+					if (process.ExitCode == 0) {
+						return outputBuilder.ToString ();
+					}
+
+					var error = $@"Could not execute process. Command line: bash {arguments}.
+						Output: {outputBuilder}
+						Error: {errorBuilder}";
+					throw new Exception (error);
+				}
+			} else {
+				using (var process = new System.Diagnostics.Process {
+					StartInfo = new System.Diagnostics.ProcessStartInfo {
+						FileName = "bash",
+						Arguments = arguments,
+						RedirectStandardInput = true,
+						UseShellExecute = false,
+						CreateNoWindow = false
+					}
+				}) {
+					process.Start ();
+					process.StandardInput.Write (inputText);
+					process.StandardInput.Close ();
+					process.WaitForExit ();
+					return inputText;
+				}
+			}
+		}
+
+		static bool DoubleWaitForExit (this System.Diagnostics.Process process)
+		{
+			var result = process.WaitForExit (500);
+			if (result) {
+				process.WaitForExit ();
+			}
+			return result;
+		}
+
+		public static bool FileExists (string value)
+		{
+			return !string.IsNullOrEmpty (value) && !value.Contains ("not found");
+		}
+	}
+
+	class MacOSXClipboard : ClipboardBase {
+		IntPtr nsString = objc_getClass ("NSString");
+		IntPtr nsPasteboard = objc_getClass ("NSPasteboard");
+		IntPtr utfTextType;
+		IntPtr generalPasteboard;
+		IntPtr initWithUtf8Register = sel_registerName ("initWithUTF8String:");
+		IntPtr allocRegister = sel_registerName ("alloc");
+		IntPtr setStringRegister = sel_registerName ("setString:forType:");
+		IntPtr stringForTypeRegister = sel_registerName ("stringForType:");
+		IntPtr utf8Register = sel_registerName ("UTF8String");
+		IntPtr nsStringPboardType;
+		IntPtr generalPasteboardRegister = sel_registerName ("generalPasteboard");
+		IntPtr clearContentsRegister = sel_registerName ("clearContents");
+
+		public override bool IsSupported => CheckSupport ();
+
+		bool CheckSupport ()
+		{
+			var result = BashRunner.Run ("which pbcopy");
+			if (!BashRunner.FileExists (result)) {
+				return false;
+			}
+			result = BashRunner.Run ("which pbpaste");
+			return BashRunner.FileExists (result);
+		}
+
+		public MacOSXClipboard ()
+		{
+			utfTextType = objc_msgSend (objc_msgSend (nsString, allocRegister), initWithUtf8Register, "public.utf8-plain-text");
+			nsStringPboardType = objc_msgSend (objc_msgSend (nsString, allocRegister), initWithUtf8Register, "NSStringPboardType");
+			generalPasteboard = objc_msgSend (nsPasteboard, generalPasteboardRegister);
+		}
+
+		protected override string GetClipboardDataImpl ()
+		{
+			var ptr = objc_msgSend (generalPasteboard, stringForTypeRegister, nsStringPboardType);
+			var charArray = objc_msgSend (ptr, utf8Register);
+			return Marshal.PtrToStringAnsi (charArray);
+		}
+
+		protected override void SetClipboardDataImpl (string text)
+		{
+			IntPtr str = default;
+			try {
+				str = objc_msgSend (objc_msgSend (nsString, allocRegister), initWithUtf8Register, text);
+				objc_msgSend (generalPasteboard, clearContentsRegister);
+				objc_msgSend (generalPasteboard, setStringRegister, str, utfTextType);
+			} finally {
+				if (str != default) {
+					objc_msgSend (str, sel_registerName ("release"));
+				}
+			}
+		}
+
+		[DllImport ("/System/Library/Frameworks/AppKit.framework/AppKit")]
+		static extern IntPtr objc_getClass (string className);
+
+		[DllImport ("/System/Library/Frameworks/AppKit.framework/AppKit")]
+		static extern IntPtr objc_msgSend (IntPtr receiver, IntPtr selector);
+
+		[DllImport ("/System/Library/Frameworks/AppKit.framework/AppKit")]
+		static extern IntPtr objc_msgSend (IntPtr receiver, IntPtr selector, string arg1);
+
+		[DllImport ("/System/Library/Frameworks/AppKit.framework/AppKit")]
+		static extern IntPtr objc_msgSend (IntPtr receiver, IntPtr selector, IntPtr arg1);
+
+		[DllImport ("/System/Library/Frameworks/AppKit.framework/AppKit")]
+		static extern IntPtr objc_msgSend (IntPtr receiver, IntPtr selector, IntPtr arg1, IntPtr arg2);
+
+		[DllImport ("/System/Library/Frameworks/AppKit.framework/AppKit")]
+		static extern IntPtr sel_registerName (string selectorName);
+	}
+
+	class WSLClipboard : ClipboardBase {
+		public override bool IsSupported => CheckSupport ();
+
+		bool CheckSupport ()
+		{
+			var result = BashRunner.Run ("which powershell.exe");
+			return BashRunner.FileExists (result);
+
+			//var result = BashRunner.Run ("which powershell.exe");
+			//if (!BashRunner.FileExists (result)) {
+			//	return false;
+			//}
+			//result = BashRunner.Run ("which clip.exe");
+			//return BashRunner.FileExists (result);
+		}
+
+		protected override string GetClipboardDataImpl ()
+		{
+			using (var powershell = new System.Diagnostics.Process {
+				StartInfo = new System.Diagnostics.ProcessStartInfo {
+					RedirectStandardOutput = true,
+					FileName = "powershell.exe",
+					Arguments = "-noprofile -command \"Get-Clipboard\""
+				}
+			}) {
+				powershell.Start ();
+				var result = powershell.StandardOutput.ReadToEnd ();
+				powershell.StandardOutput.Close ();
+				powershell.WaitForExit ();
+				return result.TrimEnd ();
+			}
+		}
+
+		protected override void SetClipboardDataImpl (string text)
+		{
+			using (var powershell = new System.Diagnostics.Process {
+				StartInfo = new System.Diagnostics.ProcessStartInfo {
+					FileName = "powershell.exe",
+					Arguments = $"-noprofile -command \"Set-Clipboard -Value \\\"{text}\\\"\""
+				}
+			}) {
+				powershell.Start ();
+				powershell.WaitForExit ();
+			}
+
+			//using (var clipExe = new System.Diagnostics.Process {
+			//	StartInfo = new System.Diagnostics.ProcessStartInfo {
+			//		FileName = "clip.exe",
+			//		RedirectStandardInput = true
+			//	}
+			//}) {
+			//	clipExe.Start ();
+			//	clipExe.StandardInput.Write (text);
+			//	clipExe.StandardInput.Close ();
+			//	clipExe.WaitForExit ();
+			//}
 		}
 	}
 }

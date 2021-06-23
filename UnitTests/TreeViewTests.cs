@@ -4,9 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Terminal.Gui;
+using Terminal.Gui.Trees;
 using Xunit;
 
 namespace Terminal.Gui.Views {
+
 	public class TreeViewTests {
 		#region Test Setup Methods
 		class Factory {
@@ -115,6 +117,8 @@ namespace Terminal.Gui.Views {
 			tree.Collapse (f);
 			//-+Factory
 			Assert.Equal (9, tree.GetContentWidth (true));
+
+			Application.Shutdown ();
 		}
 
 		[Fact]
@@ -153,6 +157,8 @@ namespace Terminal.Gui.Views {
 			tree.ScrollOffsetVertical = 5;
 			Assert.Equal (0, tree.GetContentWidth (true));
 			Assert.Equal (13, tree.GetContentWidth (false));
+
+			Application.Shutdown ();
 		}
 		/// <summary>
 		/// Tests that <see cref="TreeView.IsExpanded(object)"/> and <see cref="TreeView.Expand(object)"/> behaves correctly when an object cannot be expanded (because it has no children)
@@ -177,6 +183,8 @@ namespace Terminal.Gui.Views {
 			tree.Collapse (c);
 
 			Assert.False (tree.IsExpanded (c));
+
+			Application.Shutdown ();
 		}
 
 		/// <summary>
@@ -495,6 +503,8 @@ namespace Terminal.Gui.Views {
 
 			Assert.True (called);
 			Assert.Same (f, activated);
+
+			Application.Shutdown ();
 		}
 
 
@@ -565,6 +575,7 @@ namespace Terminal.Gui.Views {
 			Assert.True (called);
 			Assert.Same (f, activated);
 
+			Application.Shutdown ();
 		}
 
 		[Fact]
@@ -591,6 +602,8 @@ namespace Terminal.Gui.Views {
 			Assert.True (called);
 			Assert.Same (f, activated);
 			Assert.Same (f, tree.SelectedObject);
+
+			Application.Shutdown ();
 		}
 
 		[Fact]
@@ -620,6 +633,8 @@ namespace Terminal.Gui.Views {
 			Assert.False (called);
 			Assert.Null (activated);
 			Assert.Null (tree.SelectedObject);
+
+			Application.Shutdown ();
 		}
 
 
@@ -655,6 +670,8 @@ namespace Terminal.Gui.Views {
 			Assert.True (called);
 			Assert.Same (car1, activated);
 			Assert.Same (car1, tree.SelectedObject);
+
+			Application.Shutdown ();
 		}
 
 

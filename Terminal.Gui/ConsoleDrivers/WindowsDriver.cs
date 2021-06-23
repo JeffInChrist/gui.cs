@@ -27,6 +27,7 @@
 //
 using NStack;
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -116,23 +117,23 @@ namespace Terminal.Gui {
 				var err = Marshal.GetLastWin32Error ();
 				if (err != 0) {
 					throw new System.ComponentModel.Win32Exception (err);
-				}				
+				}
 				visibility = Gui.CursorVisibility.Default;
 
 				return false;
 			}
 
-			if (!info.bVisible)        
+			if (!info.bVisible)
 				visibility = CursorVisibility.Invisible;
-			else if (info.dwSize > 50) 
+			else if (info.dwSize > 50)
 				visibility = CursorVisibility.Box;
-			else                       
+			else
 				visibility = CursorVisibility.Underline;
 
 			return true;
 		}
 
-		public bool EnsureCursorVisibility () 
+		public bool EnsureCursorVisibility ()
 		{
 			if (initialCursorVisibility.HasValue && pendingCursorVisibility.HasValue && SetCursorVisibility (pendingCursorVisibility.Value)) {
 				pendingCursorVisibility = null;
@@ -161,11 +162,11 @@ namespace Terminal.Gui {
 
 			if (currentCursorVisibility.HasValue == false || currentCursorVisibility.Value != visibility) {
 				ConsoleCursorInfo info = new ConsoleCursorInfo {
-					dwSize   =  (uint) visibility & 0x00FF,
-					bVisible = ((uint) visibility & 0xFF00) != 0
+					dwSize = (uint)visibility & 0x00FF,
+					bVisible = ((uint)visibility & 0xFF00) != 0
 				};
 
-				if (!SetConsoleCursorInfo (ScreenBuffer, ref info)) 
+				if (!SetConsoleCursorInfo (ScreenBuffer, ref info))
 					return false;
 
 				currentCursorVisibility = visibility;
@@ -620,11 +621,15 @@ namespace Terminal.Gui {
 		int cols, rows, top;
 		WindowsConsole winConsole;
 		WindowsConsole.SmallRect damageRegion;
+		IClipboard clipboard;
 
 		public override int Cols => cols;
 		public override int Rows => rows;
+		public override int Left => 0;
 		public override int Top => top;
 		public override bool HeightAsBuffer { get; set; }
+
+		public override IClipboard Clipboard => clipboard;
 
 		public WindowsConsole WinConsole {
 			get => winConsole;
@@ -639,6 +644,7 @@ namespace Terminal.Gui {
 		public WindowsDriver ()
 		{
 			winConsole = new WindowsConsole ();
+			clipboard = new WindowsClipboard ();
 		}
 
 		bool winChanging;
@@ -1063,7 +1069,7 @@ namespace Terminal.Gui {
 			case ConsoleKey.Enter:
 				return MapKeyModifiers (keyInfo, Key.Enter);
 			case ConsoleKey.Spacebar:
-				return MapKeyModifiers (keyInfo, Key.Space);
+				return MapKeyModifiers (keyInfo, keyInfo.KeyChar == 0 ? Key.Space : (Key)keyInfo.KeyChar);
 			case ConsoleKey.Backspace:
 				return MapKeyModifiers (keyInfo, Key.Backspace);
 			case ConsoleKey.Delete:
@@ -1154,7 +1160,7 @@ namespace Terminal.Gui {
 				return (Key)((uint)Key.F1 + delta);
 			}
 			if (keyInfo.KeyChar != 0) {
-				return (Key)((uint)keyInfo.KeyChar);
+				return MapKeyModifiers (keyInfo, (Key)((uint)keyInfo.KeyChar));
 			}
 
 			return (Key)(0xffffffff);
@@ -1210,7 +1216,7 @@ namespace Terminal.Gui {
 			Colors.Menu.Disabled = MakeColor (ConsoleColor.Gray, ConsoleColor.DarkGray);
 
 			Colors.Dialog.Normal = MakeColor (ConsoleColor.Black, ConsoleColor.Gray);
-			Colors.Dialog.Focus = MakeColor (ConsoleColor.Black, ConsoleColor.DarkGray);
+			Colors.Dialog.Focus = MakeColor (ConsoleColor.White, ConsoleColor.DarkGray);
 			Colors.Dialog.HotNormal = MakeColor (ConsoleColor.DarkBlue, ConsoleColor.Gray);
 			Colors.Dialog.HotFocus = MakeColor (ConsoleColor.DarkBlue, ConsoleColor.DarkGray);
 
@@ -1419,6 +1425,60 @@ namespace Terminal.Gui {
 		public override void CookMouse ()
 		{
 		}
+
+		public override void SendKeys (char keyChar, ConsoleKey key, bool shift, bool alt, bool control)
+		{
+			WindowsConsole.InputRecord input = new WindowsConsole.InputRecord ();
+			input.EventType = WindowsConsole.EventType.Key;
+
+			WindowsConsole.KeyEventRecord keyEvent = new WindowsConsole.KeyEventRecord ();
+			keyEvent.bKeyDown = true;
+			WindowsConsole.ControlKeyState controlKey = new WindowsConsole.ControlKeyState ();
+			if (shift) {
+				controlKey |= WindowsConsole.ControlKeyState.ShiftPressed;
+				keyEvent.UnicodeChar = '\0';
+				keyEvent.wVirtualKeyCode = 16;
+			}
+			if (alt) {
+				controlKey |= WindowsConsole.ControlKeyState.LeftAltPressed;
+				controlKey |= WindowsConsole.ControlKeyState.RightAltPressed;
+				keyEvent.UnicodeChar = '\0';
+				keyEvent.wVirtualKeyCode = 18;
+			}
+			if (control) {
+				controlKey |= WindowsConsole.ControlKeyState.LeftControlPressed;
+				controlKey |= WindowsConsole.ControlKeyState.RightControlPressed;
+				keyEvent.UnicodeChar = '\0';
+				keyEvent.wVirtualKeyCode = 17;
+			}
+			keyEvent.dwControlKeyState = controlKey;
+
+			input.KeyEvent = keyEvent;
+
+			if (shift || alt || control) {
+				ProcessInput (input);
+			}
+
+			keyEvent.UnicodeChar = keyChar;
+			if ((shift || alt || control)
+				&& (key >= ConsoleKey.A && key <= ConsoleKey.Z
+				|| key >= ConsoleKey.D0 && key <= ConsoleKey.D9)) {
+				keyEvent.wVirtualKeyCode = (ushort)key;
+			} else {
+				keyEvent.wVirtualKeyCode = '\0';
+			}
+
+			input.KeyEvent = keyEvent;
+
+			try {
+				ProcessInput (input);
+			} catch (OverflowException) { }
+			finally {
+				keyEvent.bKeyDown = false;
+				input.KeyEvent = keyEvent;
+				ProcessInput (input);
+			}
+		}
 		#endregion
 	}
 
@@ -1578,5 +1638,140 @@ namespace Terminal.Gui {
 			//	WinChanged?.Invoke (windowSize);
 			//}
 		}
+	}
+
+	class WindowsClipboard : ClipboardBase {
+		public override bool IsSupported => IsClipboardFormatAvailable (cfUnicodeText) ? true : false;
+
+		protected override string GetClipboardDataImpl ()
+		{
+			//if (!IsClipboardFormatAvailable (cfUnicodeText))
+			//	return null;
+
+			try {
+				if (!OpenClipboard (IntPtr.Zero))
+					return null;
+
+				IntPtr handle = GetClipboardData (cfUnicodeText);
+				if (handle == IntPtr.Zero)
+					return null;
+
+				IntPtr pointer = IntPtr.Zero;
+
+				try {
+					pointer = GlobalLock (handle);
+					if (pointer == IntPtr.Zero)
+						return null;
+
+					int size = GlobalSize (handle);
+					byte [] buff = new byte [size];
+
+					Marshal.Copy (pointer, buff, 0, size);
+
+					return System.Text.Encoding.Unicode.GetString (buff)
+						.TrimEnd ('\0')
+						.Replace ("\r\n", "\n");
+				} finally {
+					if (pointer != IntPtr.Zero)
+						GlobalUnlock (handle);
+				}
+			} finally {
+				CloseClipboard ();
+			}
+		}
+
+		protected override void SetClipboardDataImpl (string text)
+		{
+			OpenClipboard ();
+
+			EmptyClipboard ();
+			IntPtr hGlobal = default;
+			try {
+				var bytes = (text.Length + 1) * 2;
+				hGlobal = Marshal.AllocHGlobal (bytes);
+
+				if (hGlobal == default) {
+					ThrowWin32 ();
+				}
+
+				var target = GlobalLock (hGlobal);
+
+				if (target == default) {
+					ThrowWin32 ();
+				}
+
+				try {
+					Marshal.Copy (text.ToCharArray (), 0, target, text.Length);
+				} finally {
+					GlobalUnlock (target);
+				}
+
+				if (SetClipboardData (cfUnicodeText, hGlobal) == default) {
+					ThrowWin32 ();
+				}
+
+				hGlobal = default;
+			} finally {
+				if (hGlobal != default) {
+					Marshal.FreeHGlobal (hGlobal);
+				}
+
+				CloseClipboard ();
+			}
+		}
+
+		void OpenClipboard ()
+		{
+			var num = 10;
+			while (true) {
+				if (OpenClipboard (default)) {
+					break;
+				}
+
+				if (--num == 0) {
+					ThrowWin32 ();
+				}
+
+				Thread.Sleep (100);
+			}
+		}
+
+		const uint cfUnicodeText = 13;
+
+		void ThrowWin32 ()
+		{
+			throw new Win32Exception (Marshal.GetLastWin32Error ());
+		}
+
+		[DllImport ("User32.dll", SetLastError = true)]
+		[return: MarshalAs (UnmanagedType.Bool)]
+		static extern bool IsClipboardFormatAvailable (uint format);
+
+		[DllImport ("kernel32.dll", SetLastError = true)]
+		static extern int GlobalSize (IntPtr handle);
+
+		[DllImport ("kernel32.dll", SetLastError = true)]
+		static extern IntPtr GlobalLock (IntPtr hMem);
+
+		[DllImport ("kernel32.dll", SetLastError = true)]
+		[return: MarshalAs (UnmanagedType.Bool)]
+		static extern bool GlobalUnlock (IntPtr hMem);
+
+		[DllImport ("user32.dll", SetLastError = true)]
+		[return: MarshalAs (UnmanagedType.Bool)]
+		static extern bool OpenClipboard (IntPtr hWndNewOwner);
+
+		[DllImport ("user32.dll", SetLastError = true)]
+		[return: MarshalAs (UnmanagedType.Bool)]
+		static extern bool CloseClipboard ();
+
+		[DllImport ("user32.dll", SetLastError = true)]
+		static extern IntPtr SetClipboardData (uint uFormat, IntPtr data);
+
+		[DllImport ("user32.dll")]
+		static extern bool EmptyClipboard ();
+
+		[DllImport ("user32.dll", SetLastError = true)]
+		static extern IntPtr GetClipboardData (uint uFormat);
 	}
 }

@@ -357,6 +357,12 @@ View for tabular data based on a <span class="xref">System.Data.DataTable</span>
       <a class="xref" href="Terminal.Gui.View.html#Terminal_Gui_View_TextAlignment">View.TextAlignment</a>
     </div>
     <div>
+      <a class="xref" href="Terminal.Gui.View.html#Terminal_Gui_View_VerticalTextAlignment">View.VerticalTextAlignment</a>
+    </div>
+    <div>
+      <a class="xref" href="Terminal.Gui.View.html#Terminal_Gui_View_TextDirection">View.TextDirection</a>
+    </div>
+    <div>
       <a class="xref" href="Terminal.Gui.View.html#Terminal_Gui_View_IsInitialized">View.IsInitialized</a>
     </div>
     <div>
@@ -391,6 +397,12 @@ View for tabular data based on a <span class="xref">System.Data.DataTable</span>
     </div>
     <div>
       <a class="xref" href="Terminal.Gui.View.html#Terminal_Gui_View_SetHeight_System_Int32_System_Int32__">View.SetHeight(Int32, Int32)</a>
+    </div>
+    <div>
+      <a class="xref" href="Terminal.Gui.View.html#Terminal_Gui_View_GetCurrentWidth_System_Int32__">View.GetCurrentWidth(Int32)</a>
+    </div>
+    <div>
+      <a class="xref" href="Terminal.Gui.View.html#Terminal_Gui_View_GetCurrentHeight_System_Int32__">View.GetCurrentHeight(Int32)</a>
     </div>
     <div>
       <a class="xref" href="Terminal.Gui.Responder.html#Terminal_Gui_Responder_Dispose">Responder.Dispose()</a>
@@ -469,7 +481,7 @@ Initialzies a <a class="xref" href="Terminal.Gui.TableView.html">TableView</a> c
   
   <h4 id="Terminal_Gui_TableView_DefaultMaxCellWidth" data-uid="Terminal.Gui.TableView.DefaultMaxCellWidth">DefaultMaxCellWidth</h4>
   <div class="markdown level1 summary">
-The default maximum cell width for <a class="xref" href="Terminal.Gui.TableView.html#Terminal_Gui_TableView_MaxCellWidth">MaxCellWidth</a> and <a class="xref" href="Terminal.Gui.ColumnStyle.html#Terminal_Gui_ColumnStyle_MaxWidth">MaxWidth</a>
+The default maximum cell width for <a class="xref" href="Terminal.Gui.TableView.html#Terminal_Gui_TableView_MaxCellWidth">MaxCellWidth</a> and <a class="xref" href="Terminal.Gui.TableView.ColumnStyle.html#Terminal_Gui_TableView_ColumnStyle_MaxWidth">MaxWidth</a>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
@@ -640,7 +652,7 @@ When <a class="xref" href="Terminal.Gui.TableView.html#Terminal_Gui_TableView_Mu
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public Stack&lt;TableSelection&gt; MultiSelectedRegions { get; }</code></pre>
+    <pre><code class="lang-csharp hljs">public Stack&lt;TableView.TableSelection&gt; MultiSelectedRegions { get; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -652,7 +664,7 @@ When <a class="xref" href="Terminal.Gui.TableView.html#Terminal_Gui_TableView_Mu
     </thead>
     <tbody>
       <tr>
-        <td><span class="xref">System.Collections.Generic.Stack</span>&lt;<a class="xref" href="Terminal.Gui.TableSelection.html">TableSelection</a>&gt;</td>
+        <td><span class="xref">System.Collections.Generic.Stack</span>&lt;<a class="xref" href="Terminal.Gui.TableView.TableSelection.html">TableView.TableSelection</a>&gt;</td>
         <td></td>
       </tr>
     </tbody>
@@ -802,7 +814,7 @@ Contains options for changing how the table is rendered
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public TableStyle Style { get; set; }</code></pre>
+    <pre><code class="lang-csharp hljs">public TableView.TableStyle Style { get; set; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -814,7 +826,7 @@ Contains options for changing how the table is rendered
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="Terminal.Gui.TableStyle.html">TableStyle</a></td>
+        <td><a class="xref" href="Terminal.Gui.TableView.TableStyle.html">TableView.TableStyle</a></td>
         <td></td>
       </tr>
     </tbody>
@@ -1101,14 +1113,14 @@ Returns true if the given cell is selected either because it is the active cell 
   
   
   <a id="Terminal_Gui_TableView_OnCellActivated_" data-uid="Terminal.Gui.TableView.OnCellActivated*"></a>
-  <h4 id="Terminal_Gui_TableView_OnCellActivated_Terminal_Gui_CellActivatedEventArgs_" data-uid="Terminal.Gui.TableView.OnCellActivated(Terminal.Gui.CellActivatedEventArgs)">OnCellActivated(CellActivatedEventArgs)</h4>
+  <h4 id="Terminal_Gui_TableView_OnCellActivated_Terminal_Gui_TableView_CellActivatedEventArgs_" data-uid="Terminal.Gui.TableView.OnCellActivated(Terminal.Gui.TableView.CellActivatedEventArgs)">OnCellActivated(TableView.CellActivatedEventArgs)</h4>
   <div class="markdown level1 summary">
 Invokes the <a class="xref" href="Terminal.Gui.TableView.html#Terminal_Gui_TableView_CellActivated">CellActivated</a> event
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">protected virtual void OnCellActivated(CellActivatedEventArgs args)</code></pre>
+    <pre><code class="lang-csharp hljs">protected virtual void OnCellActivated(TableView.CellActivatedEventArgs args)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -1121,7 +1133,7 @@ Invokes the <a class="xref" href="Terminal.Gui.TableView.html#Terminal_Gui_Table
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="Terminal.Gui.CellActivatedEventArgs.html">CellActivatedEventArgs</a></td>
+        <td><a class="xref" href="Terminal.Gui.TableView.CellActivatedEventArgs.html">TableView.CellActivatedEventArgs</a></td>
         <td><span class="parametername">args</span></td>
         <td></td>
       </tr>
@@ -1130,14 +1142,14 @@ Invokes the <a class="xref" href="Terminal.Gui.TableView.html#Terminal_Gui_Table
   
   
   <a id="Terminal_Gui_TableView_OnSelectedCellChanged_" data-uid="Terminal.Gui.TableView.OnSelectedCellChanged*"></a>
-  <h4 id="Terminal_Gui_TableView_OnSelectedCellChanged_Terminal_Gui_SelectedCellChangedEventArgs_" data-uid="Terminal.Gui.TableView.OnSelectedCellChanged(Terminal.Gui.SelectedCellChangedEventArgs)">OnSelectedCellChanged(SelectedCellChangedEventArgs)</h4>
+  <h4 id="Terminal_Gui_TableView_OnSelectedCellChanged_Terminal_Gui_TableView_SelectedCellChangedEventArgs_" data-uid="Terminal.Gui.TableView.OnSelectedCellChanged(Terminal.Gui.TableView.SelectedCellChangedEventArgs)">OnSelectedCellChanged(TableView.SelectedCellChangedEventArgs)</h4>
   <div class="markdown level1 summary">
 Invokes the <a class="xref" href="Terminal.Gui.TableView.html#Terminal_Gui_TableView_SelectedCellChanged">SelectedCellChanged</a> event
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">protected virtual void OnSelectedCellChanged(SelectedCellChangedEventArgs args)</code></pre>
+    <pre><code class="lang-csharp hljs">protected virtual void OnSelectedCellChanged(TableView.SelectedCellChangedEventArgs args)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -1150,7 +1162,7 @@ Invokes the <a class="xref" href="Terminal.Gui.TableView.html#Terminal_Gui_Table
     </thead>
     <tbody>
       <tr>
-        <td><a class="xref" href="Terminal.Gui.SelectedCellChangedEventArgs.html">SelectedCellChangedEventArgs</a></td>
+        <td><a class="xref" href="Terminal.Gui.TableView.SelectedCellChangedEventArgs.html">TableView.SelectedCellChangedEventArgs</a></td>
         <td><span class="parametername">args</span></td>
         <td></td>
       </tr>
@@ -1368,7 +1380,7 @@ This event is raised when a cell is activated e.g. by double clicking or pressin
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public event Action&lt;CellActivatedEventArgs&gt; CellActivated</code></pre>
+    <pre><code class="lang-csharp hljs">public event Action&lt;TableView.CellActivatedEventArgs&gt; CellActivated</code></pre>
   </div>
   <h5 class="eventType">Event Type</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -1380,7 +1392,7 @@ This event is raised when a cell is activated e.g. by double clicking or pressin
     </thead>
     <tbody>
       <tr>
-        <td><span class="xref">System.Action</span>&lt;<a class="xref" href="Terminal.Gui.CellActivatedEventArgs.html">CellActivatedEventArgs</a>&gt;</td>
+        <td><span class="xref">System.Action</span>&lt;<a class="xref" href="Terminal.Gui.TableView.CellActivatedEventArgs.html">TableView.CellActivatedEventArgs</a>&gt;</td>
         <td></td>
       </tr>
     </tbody>
@@ -1394,7 +1406,7 @@ This event is raised when the selected cell in the table changes.
   <div class="markdown level1 conceptual"></div>
   <h5 class="decalaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public event Action&lt;SelectedCellChangedEventArgs&gt; SelectedCellChanged</code></pre>
+    <pre><code class="lang-csharp hljs">public event Action&lt;TableView.SelectedCellChangedEventArgs&gt; SelectedCellChanged</code></pre>
   </div>
   <h5 class="eventType">Event Type</h5>
   <table class="table table-bordered table-striped table-condensed">
@@ -1406,7 +1418,7 @@ This event is raised when the selected cell in the table changes.
     </thead>
     <tbody>
       <tr>
-        <td><span class="xref">System.Action</span>&lt;<a class="xref" href="Terminal.Gui.SelectedCellChangedEventArgs.html">SelectedCellChangedEventArgs</a>&gt;</td>
+        <td><span class="xref">System.Action</span>&lt;<a class="xref" href="Terminal.Gui.TableView.SelectedCellChangedEventArgs.html">TableView.SelectedCellChangedEventArgs</a>&gt;</td>
         <td></td>
       </tr>
     </tbody>
